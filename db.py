@@ -6,6 +6,7 @@
 usuarios = [
     {"usuario": "admin", "password": "1234", "rol": "admin"},
     {"usuario": "medico", "password": "1234", "rol": "medico"}
+    {"usuario": "samh", "password": "1234", "rol": "admin"}
 ]
 
 # Pacientes
