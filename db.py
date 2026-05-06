@@ -52,13 +52,28 @@ def init_db():
             probabilidad REAL NOT NULL,
             fecha        TEXT DEFAULT (date('now'))
         );
+        
+        -- NUEVA TABLA: Catálogo general para seleccionar síntomas sin escribirlos
+        CREATE TABLE IF NOT EXISTS catalogo_sintomas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT UNIQUE NOT NULL
+        );
     """)
+    
+    # Insertar usuarios base
     cur.execute("SELECT COUNT(*) FROM usuarios")
     if cur.fetchone()[0] == 0:
         cur.executemany(
             "INSERT INTO usuarios (usuario, password, rol) VALUES (?, ?, ?)",
             [("admin","1234","admin"), ("medico","1234","medico"), ("samh","1234","admin")]
         )
+        
+    # Insertar síntomas comunes en el catálogo inicial si está vacío
+    cur.execute("SELECT COUNT(*) FROM catalogo_sintomas")
+    if cur.fetchone()[0] == 0:
+        sintomas_comunes = [("Fiebre",), ("Tos",), ("Dolor de cabeza",), ("Fatiga",), ("Náuseas",), ("Mareos",), ("Dolor muscular",)]
+        cur.executemany("INSERT OR IGNORE INTO catalogo_sintomas (nombre) VALUES (?)", sintomas_comunes)
+
     con.commit()
     con.close()
 
@@ -118,8 +133,12 @@ def get_enfermedades():
 
 def agregar_enfermedad(nombre, descripcion):
     con = get_con()
-    con.execute("INSERT INTO enfermedades (nombre, descripcion) VALUES (?, ?)", (nombre, descripcion))
-    con.commit(); con.close()
+    cur = con.cursor()
+    cur.execute("INSERT INTO enfermedades (nombre, descripcion) VALUES (?, ?)", (nombre, descripcion))
+    enfermedad_id = cur.lastrowid # MODIFICACIÓN CLAVE: Se retorna el ID
+    con.commit()
+    con.close()
+    return enfermedad_id
 
 def eliminar_enfermedad(nombre):
     con = get_con()
@@ -155,6 +174,24 @@ def get_todos_sintomas():
     con.close()
     return [dict(r) for r in rows]
 
+# ── NUEVO: CATÁLOGO DE SÍNTOMAS GENERALES ─────────────
+def get_catalogo_sintomas():
+    con = get_con()
+    rows = con.execute("SELECT * FROM catalogo_sintomas ORDER BY nombre ASC").fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+def agregar_sintoma_catalogo(nombre):
+    con = get_con()
+    try:
+        con.execute("INSERT INTO catalogo_sintomas (nombre) VALUES (?)", (nombre,))
+        con.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False # El síntoma ya existe en el catálogo
+    finally:
+        con.close()
+
 # ── DIAGNÓSTICOS / HISTORIAL ──────────────────────────
 def get_diagnosticos():
     con = get_con()
@@ -177,23 +214,25 @@ def get_historial():
     return [dict(r) for r in rows]
 
 # ── LISTAS EN MEMORIA ─────────────────────────────────
-usuarios     = []
-pacientes    = []
-medicos      = []
-enfermedades = []
-sintomas     = []
-diagnosticos = []
-historial    = []
+usuarios          = []
+pacientes         = []
+medicos           = []
+enfermedades      = []
+sintomas          = []
+diagnosticos      = []
+historial         = []
+catalogo_sintomas = [] # NUEVA LISTA
 
 def cargar_todo():
-    global usuarios, pacientes, medicos, enfermedades, sintomas, diagnosticos, historial
-    usuarios     = get_usuarios()
-    pacientes    = get_pacientes()
-    medicos      = get_medicos()
-    enfermedades = get_enfermedades()
-    sintomas     = get_todos_sintomas()
-    diagnosticos = get_diagnosticos()
-    historial    = get_historial()
+    global usuarios, pacientes, medicos, enfermedades, sintomas, diagnosticos, historial, catalogo_sintomas
+    usuarios          = get_usuarios()
+    pacientes         = get_pacientes()
+    medicos           = get_medicos()
+    enfermedades      = get_enfermedades()
+    sintomas          = get_todos_sintomas()
+    diagnosticos      = get_diagnosticos()
+    historial         = get_historial()
+    catalogo_sintomas = get_catalogo_sintomas()
 
 init_db()
 cargar_todo()
